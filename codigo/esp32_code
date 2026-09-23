@@ -1,0 +1,70 @@
+#include <Arduino.h>
+
+const int PIN_DAC = 25; // Salida DAC hardware
+
+void setup() {
+  Serial.begin(115200);
+  while (!Serial && millis() < 3000);
+
+  Serial.println("\n========================================================");
+  Serial.println("   UNMSM - INSTRUMENTACIÓN BIOMÉDICA III - GUÍA N.º 1");
+  Serial.println("   Simulador de Electrodo de pH en GPIO25 (DAC)");
+  Serial.println("========================================================");
+
+  // Valor inicial: pH 7 (1.65 V)
+  dacWrite(PIN_DAC, 128);
+
+  Serial.println("\n[SISTEMA LISTO] Ingrese un valor de pH (ejemplos: 4, 7, 10):");
+}
+
+void loop() {
+  if (Serial.available() > 0) {
+    // Evitar lecturas falsas por saltos de línea
+    char c = Serial.peek();
+    if (c == '\n' || c == '\r' || c == ' ') {
+      Serial.read();
+      return;
+    }
+
+    float ph = Serial.parseFloat();
+
+    // Limpiar el búfer serie
+    while (Serial.available() > 0) Serial.read();
+
+    // Limitar el pH al rango de 0 a 14
+    if (ph < 0.0f) ph = 0.0f;
+    if (ph > 14.0f) ph = 14.0f;
+
+    // Ecuación de Nernst escalada: pH 7 = 1.65 V | Sensibilidad = -0.15 V por pH
+    float v_target = 1.65f - 0.15f * (ph - 7.0f);
+
+    // Limitar voltaje entre 0.0 V y 3.3 V
+    if (v_target < 0.0f) v_target = 0.0f;
+    if (v_target > 3.3f) v_target = 3.3f;
+
+    // Convertir a código de 8 bits (0 a 255)
+    uint8_t code = (uint8_t)round((v_target / 3.3f) * 255.0f);
+
+    // Generar salida por el DAC en GPIO25
+    dacWrite(PIN_DAC, code);
+
+    float v_teorico = (code * 3.3f) / 255.0f;
+
+    Serial.println("\n--------------------------------------------------------");
+    Serial.print("pH Ingresado           : ");
+    Serial.println(ph, 1);
+
+    Serial.print("Voltaje Teórico        : ");
+    Serial.print(v_target, 3);
+    Serial.println(" V");
+
+    Serial.print("Código DAC (0-255)     : ");
+    Serial.println(code);
+
+    Serial.print("Voltaje Real DAC       : ");
+    Serial.print(v_teorico, 3);
+    Serial.println(" V");
+    Serial.println("--------------------------------------------------------");
+    Serial.println("Ingrese siguiente valor de pH (0 a 14):");
+  }
+}
